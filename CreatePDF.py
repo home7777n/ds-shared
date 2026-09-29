@@ -301,12 +301,18 @@ def register_fonts():
          "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc"),
     ]
 
+    # v6.21 / 115/09/10:改為「內文字型存在即採用」,粗體檔缺席不整組退回下一候選。
+    # 舊邏輯是 L+B 都在才採用,但工程師端 原漾黑丹體\ 只放 L 與等寬版
+    # (115/06/28 裁示捨棄 B)→ 有 L 也會一路退到 Noto,整份文件失去原漾黑。
+    # 對齊該裁示:B 缺席 → 粗體 alias 指向 L(標題不偽粗,靠字級區分)。
     sans_ttc = None
     bold_ttc = None
     for reg, bld in candidates:
-        if os.path.exists(reg) and os.path.exists(bld):
+        if os.path.exists(reg):
             sans_ttc = reg
-            bold_ttc = bld
+            bold_ttc = bld if os.path.exists(bld) else reg
+            if bold_ttc == reg:
+                print(f"[CreatePDF] 粗體字型缺席 -> 標題改用內文字重(不偽粗)")
             break
 
     print(f"[CreatePDF] 主字型: {sans_ttc}")
@@ -2097,6 +2103,11 @@ def verify(pdf_path, tolerance=20):
                         _is_bold = bool(first) and (
                             "Bold" in _fn or _fn.endswith("-B") or _fn.endswith("+GenYoGothic2TC-B")
                         )
+                        # v6.21 / 115/09/10:粗體檔缺席時標題與內文同字重,
+                        # 靠字名判不出來 → 退回字級判定(內文 9.5pt,H4 起 11pt)。
+                        # 兩條件取聯集,有真粗體時行為與舊版完全相同。
+                        if not _is_bold and first and first.size >= 10.5:
+                            _is_bold = True
                         if first and first.size >= 10.5 and _is_bold:
                             text = line.get_text().strip()
                             if text:
